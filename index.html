@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>sake_chat_senmai</title>
+    <style>
+         #output li {
+            background: #ccc;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            text-align: left;
+        }
+        header {
+            background-color: #fff;
+            border-bottom: 1px solid #ccc;
+            text-align: center;
+            padding: 10px 0;
+        }
+        main {
+            border-bottom: 1px solid #ccc;
+            padding: 20px;
+            text-align: center;
+        }
+        footer {
+            background-color: #fff;
+            border-top: 1px solid #ccc;
+            text-align: center;
+            padding: 10px 0;
+        }
+        p {
+            text-align: center;
+            margin: 20px auto;
+            height: auto;
+        }
+        ul {
+            margin: 0 auto;
+            padding: 0;
+            border-top: 1px solid #000000;
+            display: flex;
+            flex-wrap: wrap; /* レスポンシブ対応 */
+            justify-content: center;
+            list-style: none;
+            width: 100%;
+            max-width: 1200px; /* レスポンシブ幅制限 */
+        }
+        li {
+            text-align: center;
+            border: 1px solid #666;
+            background-color: #fff;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+            flex: 1 1 calc(25% - 10px); /* カラム幅調整 */
+            max-width: calc(25% - 10px); /* 最大幅を調整 */
+            box-sizing: border-box;
+        }
+        li:hover {
+            background: #0066CC;
+            color: #fff;
+        }
+
+        /* スマートフォン対応 */
+        @media (max-width: 768px) {
+            li {
+                flex: 1 1 calc(50% - 10px);
+                max-width: calc(50% - 10px);
+            }
+        }
+        /* 小型デバイス対応 */
+        @media (max-width: 480px) {
+            li {
+                flex: 1 1 100%;
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>sake_chat_senmai</h1>
+    </header>
+    <main>
+      <p>洗米｜米の振分けを記載する</p>
+      <form>
+        <fieldset>
+          <legend>チャット入力画面</legend>
+          <div>
+            米の種類: <input type="text" id="ricetype">
+          </div>
+          <div>
+            産地と精米歩合: <input type="text" id="origin">
+          </div>
+          <div>
+            数量(kg): <input type="text" id="quantity">
+          </div>
+          <div>
+            <button type="button" id="send">send</button>
+          </div>
+        </fieldset>
+      </form>
+    
+      <!-- データ出力場所 -->
+      <ul id="output"></ul>
+    
+      <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+      <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import {
+          getFirestore,
+          collection,
+          addDoc,
+          serverTimestamp,
+          query,
+          orderBy,
+          onSnapshot,
+          doc,
+          setDoc,
+        } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    
+        const firebaseConfig = {
+          
+          authDomain: "chat-app-test-2470a.firebaseapp.com",
+          projectId: "chat-app-test-2470a",
+          storageBucket: "chat-app-test-2470a.firebasestorage.app",
+          messagingSenderId: "491512667420",
+          appId: "1:491512667420:web:179cbe56d819be9d83aed9",
+          measurementId: "G-JZ5EWV1L1D",
+        };
+    
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+    
+        // 日時フォーマット関数
+        function convertTimestampToDatetime(timestamp) {
+          const _d = timestamp ? new Date(timestamp * 1000) : new Date();
+          const Y = _d.getFullYear();
+          const m = (_d.getMonth() + 1).toString().padStart(2, "0");
+          const d = _d.getDate().toString().padStart(2, "0");
+          const H = _d.getHours().toString().padStart(2, "0");
+          const i = _d.getMinutes().toString().padStart(2, "0");
+          const s = _d.getSeconds().toString().padStart(2, "0");
+          return `${Y}/${m}/${d} ${H}:${i}:${s}`;
+        }
+    
+        // Firestoreからデータを取得してリスト表示
+        const q = query(collection(db, "chat"), orderBy("time", "desc"));
+        onSnapshot(q, (querySnapshot) => {
+          const elements = querySnapshot.docs.map((doc) => `
+            <li id="${doc.id}">
+              <p>米の種類: ${doc.data().ricetype}</p>
+              <p>産地と精米歩合: ${doc.data().origin}</p>
+              <p>数量(kg): ${doc.data().quantity}</p>
+              <p>登録日時: ${convertTimestampToDatetime(doc.data().time.seconds)}</p>
+            </li>
+          `);
+          $("#output").html(elements.join(""));
+        });
+    
+        // データ送信
+        $("#send").on("click", function () {
+          const postData = {
+            ricetype: $("#ricetype").val(),
+            origin: $("#origin").val(),
+            quantity: $("#quantity").val(),
+            time: serverTimestamp(),
+          };
+    
+          addDoc(collection(db, "chat"), postData)
+            .then(() => {
+              console.log("データが正常に送信されました。");
+              $("#ricetype").val("");
+              $("#origin").val("");
+              $("#quantity").val("");
+            })
+            .catch((error) => {
+              console.error("データ送信エラー:", error);
+            });
+        });
+    
+        // ドキュメントを上書き
+        async function updateChat(documentId, newData) {
+          const chatDocRef = doc(db, "chat", documentId);
+          try {
+            await setDoc(chatDocRef, newData);
+            alert(`ドキュメント ${documentId} を上書きしました。`);
+          } catch (error) {
+            console.error("上書きエラー:", error);
+          }
+        }
+      </script>
+    </main>
+    <footer>
+        <p>その他、問題があればここに記載します。</p>
+    </footer>
+</body>
+</html>
